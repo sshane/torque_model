@@ -14,7 +14,7 @@ As talked about in great detail and with a simple thought experiment in [comma.a
 
 The way we generate automatically-labeled training data for a model that predicts how to control a steering wheel is rather simple; any time a human is driving we just take the current (t<sub>0s</sub>) and future (t<sub>0.3s</sub>) steering wheel angles and then just have the model predict whatever torque the human was applying at t<sub>0s</sub> to get us there.
 
-This seems to works great, and the validation loss also seems to be really low! However, when you actually try to drive on this model or put it in a simulator, you can quickly see that any small disturbances (like wind, road camber, etc) quickly lead to a feedback loop or just plain inability to correct back to our desired steering angle.
+This seems to work great, and the validation loss also seems to be really low! However, when you actually try to drive on this model or put it in a simulator, you can quickly see that any small disturbances (like wind, road camber, etc) quickly lead to a feedback loop or just plain inability to correct back to our desired steering angle.
 
 This is due to the automatically-generated training and validation data containing only samples where the current and future (desired during runtime) steering wheel angles are very close together (just a couple degrees), as a symptom of only using data where the future angle is just fractions of a second away.
 
