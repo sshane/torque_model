@@ -8,11 +8,11 @@ Needs to be cloned into an [openpilot](https://github.com/commaai/openpilot) rep
 
 # The problem
 
-As talked about in great detail and with a simple thought experiment in [comma.ai](https://comma.ai)'s blog post [here](https://blog.comma.ai/end-to-end-lateral-planning/) about end to end lateral planning, the same concept of behavior cloning not being able to recover from disturbances applies here.
+As talked about in great detail and with a simple thought experiment in [comma.ai](https://comma.ai)'s blog post [here](https://blog.comma.ai/end-to-end-lateral-planning/) about end to end lateral planning, the same concept of behavioral cloning not being able to recover from disturbances applies here.
 
 ## Behavior cloning and lack of perturbations
 
-The way we generate automatically-labeled training data for a model that predicts how to control a steering wheel is rather simple; any time a human is driving we just take the current (t<sub>0s</sub>) and future (t<sub>0.5s</sub>) steering wheel angles and then just have the model predict whatever torque the human was applying at t<sub>0s</sub>.
+The way we generate automatically-labeled training data for a model that predicts how to control a steering wheel is rather simple; any time a human is driving we just take the current (t<sub>0s</sub>) and future (t<sub>0.3s</sub>) steering wheel angles and then just have the model predict whatever torque the human was applying at t<sub>0s</sub>.
 
 This seems to works great, and the validation loss also seems to be really low! However, when you actually try to drive on this model or put it in a simulator, you can quickly see that any small disturbances (like wind, road camber, etc) quickly lead to a feedback loop or just plain inability to correct back to our desired steering angle.
 
