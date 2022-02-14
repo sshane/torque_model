@@ -2,7 +2,7 @@
 
 The torque model is a spiritual successor to [op-smart-torque](https://github.com/sshane/op-smart-torque), which was a project to train a neural network to control a car's steering fully end to end.
 
-The input is the current wheel angle and future wheel angle ([among other things](https://github.com/sshane/torque_model/blob/103b5ddca091dcfabf8002f2c820515024f77acf/lib/helpers.py#L17)), and the net's output is the torque to apply to the wheel to reach that smoothly and confidently. This bypasses the need to manually tune a PID, LQR, or INDI controller, while gaining human-like control over the steering wheel.
+The input is the current wheel angle and future wheel angle ([among other things](https://github.com/sshane/torque_model/blob/103b5ddca091dcfabf8002f2c820515024f77acf/lib/helpers.py#L17)), and the net's output is what torque the human was applying at the time to reach that future state smoothly and confidently. This bypasses the need to manually tune a PID, LQR, or INDI controller, while gaining human-like control over the steering wheel.
 
 Needs to be cloned into an [openpilot](https://github.com/commaai/openpilot) repo to take advantage of its tools.
 
