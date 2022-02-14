@@ -12,7 +12,7 @@ As talked about in great detail and with a simple thought experiment in [comma.a
 
 ## Behavior cloning and lack of perturbations
 
-The way we generate automatically-labeled training data for a model that predicts how to control a steering wheel is rather simple; any time a human is driving we just take the current (t<sub>0s</sub>) and future (t<sub>0.3s</sub>) steering wheel angles and then just have the model predict whatever torque the human was applying at t<sub>0s</sub>.
+The way we generate automatically-labeled training data for a model that predicts how to control a steering wheel is rather simple; any time a human is driving we just take the current (t<sub>0s</sub>) and future (t<sub>0.3s</sub>) steering wheel angles and then just have the model predict whatever torque the human was applying at t<sub>0s</sub> to get us there.
 
 This seems to works great, and the validation loss also seems to be really low! However, when you actually try to drive on this model or put it in a simulator, you can quickly see that any small disturbances (like wind, road camber, etc) quickly lead to a feedback loop or just plain inability to correct back to our desired steering angle.
 
@@ -22,6 +22,12 @@ To fully realize the problem, think about what would happen if you wanted this m
 
 # The solution
 
-The solution talked about in the blog post above is to use a very simple simulator to tell the model what path the human drove and then warp the input video to be offset left or right, as well as introducing oscillation. This approach can also be taken here, where we generate random samples with an arbitrary steering wheel angle error, and then use a simple model of predicting torque, like a PF (proportional-feedforward) controller as the output to predict.
+The solution talked about in the blog post above is to use a very simple simulator to warp the input video to be offset left or right, and then tell the model what path the human actually drove. A similar approach can also be taken here, where we generate random samples with an arbitrary steering wheel angle error, and then use a simple model of steering wheel torque, like a PF (proportional-feedforward) controller as the output to predict.
 
 For the example above where we start at 0 degrees and want to reach 90 degrees, we can inject samples into the training data where we have that exact situation and then have the output be what a simple PF controller would output. Then during runtime in the car, when the model corrects for this arbitrary high angle error situation, the current and desired steering wheel angles become much closer together, and the model can then use its knowledge of how humans control under these circumstances.
+
+# The future
+
+The current model described and implememted here is non-temporal, meaning the model has no knowledge of the past, where the steering wheel was, and inferring where it's heading. While the input data includes the steering angle rate, there's a lot of information missing it could use to improve its predictions, as well as a model bug where including the angle rate during runtime causes very smoothed and laggy predictions (probably due to the generated synthetic samples not taking any angle rate into account).
+
+Ideally the model has some knowledge of the past, however this means we need an accurate simulator to train the model with perturbations added, so it can correct for disturbances in the real world.
