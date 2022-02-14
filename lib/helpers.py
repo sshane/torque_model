@@ -65,7 +65,7 @@ class LatControlPF:
   def k_p(self):
     return interp(self.speed, [20 * CV.MPH_TO_MS, 70 * CV.MPH_TO_MS], [.1, .2])
 
-  def update(self, setpoint, measurement, speed):
+  def update(self, setpoint, measurement, rate_des, speed):
     self.speed = speed
     f = feedforward(setpoint, speed)
     # f = model_feedforward(setpoint, speed)
@@ -74,6 +74,7 @@ class LatControlPF:
 
     p = error * self.k_p
     f = f * self.k_f
+    f += rate_des * 1.  # figure out a good kf for rate
 
     return p + f  # multiply by 1500 to get torque units
     # return np.clip(p + steer_feedforward, -1, 1)  # multiply by 1500 to get torque units

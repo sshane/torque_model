@@ -11,7 +11,7 @@ from selfdrive.config import Conversions as CV
 import seaborn as sns
 import time
 import pickle
-from torque_model.helpers import feedforward, random_chance, TORQUE_SCALE, LatControlPF, STATS_KEYS, REVERSED_STATS_KEYS, MODEL_INPUTS, normalize_sample
+from torque_model.lib.helpers import feedforward, random_chance, TORQUE_SCALE, LatControlPF, STATS_KEYS, REVERSED_STATS_KEYS, MODEL_INPUTS, normalize_sample
 from common.basedir import BASEDIR
 
 DT_CTRL = 0.01
@@ -184,7 +184,7 @@ class SyntheticDataGenerator:
         _sample[key] = self.data[idx][key]  # todo: maybe randomly transform them by a small number?
 
       _sample['angle_error'] = abs(_sample['steering_angle'] - _sample['fut_steering_angle'])
-      _sample['torque'] = self.pid.update(_sample['fut_steering_angle'], _sample['steering_angle'], _sample['v_ego']) * TORQUE_SCALE
+      _sample['torque'] = self.pid.update(_sample['fut_steering_angle'], _sample['steering_angle'], _sample['fut_steering_rate'], _sample['v_ego']) * TORQUE_SCALE
       return _sample
 
     sample = _gen()

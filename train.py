@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from tensorflow.python.keras.layers import Dropout
 
 from common.numpy_fast import interp
-from torque_model.helpers import LatControlPF, TORQUE_SCALE, random_chance, STATS_KEYS, REVERSED_STATS_KEYS, MODEL_INPUTS, normalize_sample, normalize_value
+from torque_model.lib.helpers import LatControlPF, TORQUE_SCALE, random_chance, STATS_KEYS, REVERSED_STATS_KEYS, MODEL_INPUTS, normalize_sample, normalize_value
 from torque_model.load import load_data
 from sklearn.model_selection import train_test_split
 from selfdrive.config import Conversions as CV
