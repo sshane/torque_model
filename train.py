@@ -36,15 +36,41 @@ data, data_sequences, data_stats, _ = load_data('data', to_normalize)
 # del data_high_delay, data_sequences
 print(f'Number of samples: {len(data)}')
 
+platforms = set()
+for line in data:
+  # print(line)
+  if 'car_fingerprint' in line:
+    platforms.add(line['car_fingerprint'])
+platforms = list(platforms)
+n_platforms = len(platforms)
+print('Platforms: {}'.format(platforms))
+
+def get_one_hot(fp):
+  one_hot_platform = [1 if fp == platform else 0 for platform in platforms]
+  assert sum(one_hot_platform) == 1
+  return one_hot_platform
+
 x_train = []
 for line in data:
-  x_train.append([line[inp] for inp in MODEL_INPUTS])
+  x = [line[inp] for inp in MODEL_INPUTS]
+  if 'car_fingerprint' in line:
+    fp = line['car_fingerprint']
+  else:
+    if abs(line['angle_error']) < 4:
+      continue
+    fp = random.sample(platforms, 1)[0]
+  x_train.append(x + get_one_hot(fp))
+  # x_train.append(x + [platforms.index(fp)])
 
+c = 0
 y_train = []
 for line in data:
+  if 'car_fingerprint' not in line and abs(line['angle_error']) < 4:
+    c += 1
+    continue
   # the torque key is set by the data loader, it can come from torque_eps or torque_cmd depending on engaged status
   y_train.append(line['torque'])
-
+print(c)
 print(f'Output (torque) min/max: {[min(y_train), max(y_train)]}')
 
 # x_train = []  # only use synthetic samples
@@ -81,14 +107,14 @@ print('Training on {} samples and validating on {} samples'.format(len(x_train),
 
 model = Sequential()
 model.add(Input(shape=x_train.shape[1:]))
-model.add(Dense(8, activation=LeakyReLU()))
-# model.add(Dropout(1/8))
 model.add(Dense(16, activation=LeakyReLU()))
-# model.add(Dropout(1/16))
+# model.add(Dropout(0.05))
+model.add(Dense(32, activation=LeakyReLU()))
+# model.add(Dropout(0.01))
 # model.add(Dense(24, activation=LeakyReLU()))
 model.add(Dense(1))
 
-epochs = 150
+epochs = 40
 starting_lr = .01
 ending_lr = 0.001
 decay = (starting_lr - ending_lr) / epochs
@@ -96,7 +122,7 @@ decay = (starting_lr - ending_lr) / epochs
 # opt = Adam(learning_rate=starting_lr, amsgrad=True, decay=decay)
 opt = Adadelta(learning_rate=1)
 # opt = Adagrad(learning_rate=0.2)
-model.compile(opt, loss='mae', metrics='mse')
+model.compile(opt, loss='mse', metrics='mae')
 try:
   model.fit(x_train, y_train, batch_size=512, epochs=20, validation_data=(x_test, y_test))
   model.fit(x_train, y_train, batch_size=128, epochs=20, validation_data=(x_test, y_test))
@@ -129,7 +155,7 @@ def plot_random_samples():
 # plot_random_samples()
 
 # speed in mph, accel in m/s/s. bit weird, but easy to work with
-def plot_response(angle=15, around=15, speed=37, accel=0):  # plots model output compared to pid on steady angle but changing desired angle
+def plot_response(angle=15, around=15, speed=37, fp="TOYOTA COROLLA 2017", accel=0):  # plots model output compared to pid on steady angle but changing desired angle
   # the two lines should ideally be pretty close
   plt.figure(2)
   plt.clf()
@@ -146,8 +172,10 @@ def plot_response(angle=15, around=15, speed=37, accel=0):  # plots model output
                                         rate, rate,
                                         normalize_value(speed, "speed", data_stats, to_normalize),
                                         normalize_value(accel, "accel", data_stats, to_normalize)]
+                                        # + [platforms.index(fp)]
+                                        + get_one_hot(fp)
                                        ]))[0][0] * 1500)
-    y_pid.append(pid.update(des, angle, speed) * 1500)
+    y_pid.append(pid.update(des, angle, 0, speed) * 1500)
   plt.plot(error, y_pid, label='standard pf controller')
   plt.plot(error, y_model, label='model')
   plt.plot([0] * len(y_pid), np.linspace(max(y_model), min(y_model), len(y_pid)))
@@ -168,12 +196,14 @@ def plot_sequence(sequence_idx=3, show_controller=True):  # plots what model wou
   plt.plot(ground_truth, label='ground truth')
 
   _x = [normalize_sample(line, data_stats, to_normalize) for line in sequence]
-  _x = [[line[inp] for inp in MODEL_INPUTS] for line in _x]
+  _x = [[line[inp] for inp in MODEL_INPUTS] + get_one_hot(line['car_fingerprint']) for line in _x]
+  # _x = [[line[inp] for inp in MODEL_INPUTS] + [platforms.index(line['car_fingerprint'])] for line in _x]
   pred = model.predict(np.array(_x)).reshape(-1) * TORQUE_SCALE
   plt.plot(pred, label='prediction')
 
   if show_controller:
-    controller = [pid.update(line['fut_steering_angle'], line['steering_angle'], line['v_ego']) * TORQUE_SCALE for line in sequence]  # what a pf controller would output
+    # controller = [pid.update(line['fut_steering_angle'], line['steering_angle'], line['fut_steering_rate'], line['v_ego']) * TORQUE_SCALE for line in sequence]  # what a pf controller would output
+    controller = [pid.update(line['fut_steering_angle'], line['steering_angle'], 0, line['v_ego']) * TORQUE_SCALE for line in sequence]  # what a pf controller would output
     plt.plot(controller, label='standard controller')
 
   plt.legend()

@@ -7,7 +7,11 @@ from selfdrive.config import Conversions as CV
 
 TORQUE_SCALE = 1500  # toyota
 # TORQUE_SCALE = 300  # volks
-STATS_KEYS = {'angle': ['fut_steering_angle', 'steering_angle'], 'rate': ['fut_steering_rate', 'steering_rate'], 'speed': ['v_ego'], 'accel': ['a_ego'], 'torque': ['torque'], 'angle_error': ['angle_error']}  # this renames keys to shorter names to access later quicker
+STATS_KEYS = {'angle': ['fut_steering_angle', 'steering_angle'],
+              'rate': ['fut_steering_rate', 'steering_rate'],
+              'speed': ['v_ego'], 'accel': ['a_ego'],
+              'torque': ['torque'],
+              'angle_error': ['angle_error']}  # this renames keys to shorter names to access later quicker
 REVERSED_STATS_KEYS = {}
 for stat_k, data_keys in STATS_KEYS.items():
   for data_k in data_keys:
@@ -63,7 +67,7 @@ class LatControlPF:
 
   @property
   def k_p(self):
-    return interp(self.speed, [20 * CV.MPH_TO_MS, 70 * CV.MPH_TO_MS], [.1, .2])
+    return interp(self.speed, [20 * CV.MPH_TO_MS, 70 * CV.MPH_TO_MS], [.05, .15])
 
   def update(self, setpoint, measurement, rate_des, speed):
     self.speed = speed
@@ -74,7 +78,7 @@ class LatControlPF:
 
     p = error * self.k_p
     f = f * self.k_f
-    f += rate_des * 1.  # figure out a good kf for rate
+    f += rate_des * .001  # figure out a good kf for rate
 
     return p + f  # multiply by 1500 to get torque units
     # return np.clip(p + steer_feedforward, -1, 1)  # multiply by 1500 to get torque units

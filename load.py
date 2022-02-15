@@ -5,6 +5,7 @@ from objprint import add_objprint
 
 import matplotlib.pyplot as plt
 import numpy as np
+from tqdm import tqdm
 
 from common.numpy_fast import interp
 from selfdrive.config import Conversions as CV
@@ -22,8 +23,21 @@ os.chdir(os.path.join(BASEDIR, 'torque_model'))
 
 
 def load_processed(file_name):
-  with open(file_name, 'rb') as f:
-    return pickle.load(f)
+  data = []
+  for fn in tqdm(os.listdir('data/')):
+    with open('data/{}'.format(fn), 'rb') as f:
+      d = pickle.load(f)
+      if len(d['data']) > 0 and len(d['data'][0]) > 0:
+        d_new = [[]]
+        for seq in d['data']:
+          for line in seq:
+            line['car_fingerprint'] = d['platform']
+            d_new.append(line)
+          d_new.append([])
+        d_new = [seq for seq in d_new if len(seq) > 0]
+        data.append(d_new)
+        # break
+  return data
 
 
 def get_steer_delay(speed):
@@ -31,7 +45,7 @@ def get_steer_delay(speed):
 
 
 def offset_torque(_data):  # todo: offsetting both speed and accel seem to decrease model loss by a LOT. maybe we should just offset all gas instead of these two todo: maybe not?
-  for i in range(len(_data)):  # accounts for steer actuator delay (from torque to change in angle)
+  for i in tqdm(range(len(_data))):  # accounts for steer actuator delay (from torque to change in angle)
     steering_angle = [line['steering_angle'] for line in _data[i]]
     steering_rate = [line['steering_rate'] for line in _data[i]]
     data_len = len(_data[i])
@@ -55,7 +69,7 @@ def filter_data(_data):
            abs(_line['fut_steering_rate']) < 300 and abs(_line['torque_eps']) < 3000
 
   filtered_sequences = []
-  for sequence in _data:
+  for sequence in tqdm(_data):
     filtered_seq = []
     for line in sequence:
       if not sample_ok(line):
@@ -65,7 +79,7 @@ def filter_data(_data):
         line['torque'] = line['torque_cmd']
         filtered_seq.append(line)
       if not line['engaged'] and random_chance(keep_distribution['user']):
-        line['torque'] = line['torque_eps'] + line['torque_driver']  # fixme: do we add these? (old: i think eps makes more sense than driver)
+        line['torque'] = line['torque_eps']  # fixme: do we add these? (old: i think eps makes more sense than driver)
         filtered_seq.append(line)
 
     if len(filtered_seq):
@@ -86,7 +100,7 @@ def even_out_torque(_data):
   left_curve_weight = right_curve_samples / left_curve_samples if left_curve_samples > right_curve_samples else 1
   right_curve_weight = left_curve_samples / right_curve_samples if right_curve_samples > left_curve_samples else 1
   new_data = []
-  for line in _data:
+  for line in tqdm(_data):
     if line['torque'] > threshold and random_chance(left_curve_weight * 100):
       new_data.append(line)
     elif line['torque'] < -threshold and random_chance(right_curve_weight * 100):
@@ -94,6 +108,7 @@ def even_out_torque(_data):
     elif abs(line['torque']) <= threshold:
       new_data.append(line)
   return new_data
+
 
 def plot_distributions(_data, idx=0):
   # key_lists = {k: [line[k] for line in _data] for k in STATS_KEYS}
@@ -106,7 +121,7 @@ def plot_distributions(_data, idx=0):
   # angle_errors = [abs(line['steering_angle'] - line['fut_steering_angle']) for line in _data]
   # key_lists['angle_errors'] = angle_errors
 
-  for key in key_lists:
+  for key in tqdm(key_lists):
     bins = 200  # int(interp(len(key_lists[key]), [800000, 100000], [50, 200]))
     kde = len(key_lists[key]) < 400000
 
@@ -149,7 +164,7 @@ def remove_outliers(_flattened):  # calculate current mean and std to filter, th
   print('Data cut offs: {}'.format({k: stats[k].cut_off for k in stats}))
 
   new_data = []
-  for line in _flattened:
+  for line in tqdm(_flattened):
     keep = []
     for stat_k, data_keys in STATS_KEYS.items():
       for data_k in data_keys:
@@ -198,8 +213,14 @@ class SyntheticDataGenerator:
 
 
 def load_data(fn='data', to_normalize=False, plot_dists=False):  # filters and processes raw pickle data from rlogs
-  data_sequences = load_processed(fn)
+  if os.path.exists('data_processed'):
+    with open('data_processed', 'rb') as f:
+      data, data_sequences = pickle.load(f)
+    data_stats = get_stats(data)
+    return data, data_sequences, data_stats, None
 
+  print('Loading data', flush=True)
+  data_sequences = load_processed(fn)
 
   # for sec in data:
   #   print('len: {}'.format(len(sec)))
@@ -210,6 +231,7 @@ def load_data(fn='data', to_normalize=False, plot_dists=False):  # filters and p
   # this adds future steering angle and rate data to each sample, which we will use to train on as inputs
   # data for model: what current torque (output) gets us to the future (input)
   # this makes more sense than training on desired angle from lateral planner since humans don't always follow what the mpc would predict in any given situation
+  print('Offsetting torque')
   data_sequences = offset_torque(data_sequences)
 
   for seq in data_sequences:  # add angle error
@@ -217,26 +239,32 @@ def load_data(fn='data', to_normalize=False, plot_dists=False):  # filters and p
       line['angle_error'] = abs(line['steering_angle'] - line['fut_steering_angle'])
 
   # filter data
+  print('Filtering data')
   data_sequences = filter_data(data_sequences)  # returns filtered sequences
 
   # flatten into 1d list of dictionary samples
+  print('Flattening data')
   flat_samples = [i.copy() for j in data_sequences for i in j]  # make a copy of each list sample so any changes don't affect data_sequences
 
   print('Flat samples: {}'.format(len(flat_samples)))
 
   if plot_dists:
+    print('Plotting distributions')
     plot_distributions(flat_samples)  # this takes a while
 
   # Remove outliers
+  print('Removing outliers')
   filtered_data = remove_outliers(flat_samples)  # returns stats about filtered data
   print('Removed outliers: {} samples'.format(len(filtered_data)))
 
   if plot_dists:
+    print('Plotting distributions')
     plot_distributions(filtered_data, 1)
 
   # Remove inliers  # too many samples with angle at 0 degrees compared to curve data
+  print('Removing inliers')
   filtered_data_new = []
-  for line in filtered_data:
+  for line in tqdm(filtered_data):
     # if abs(line['torque']) > 500:
     #   filtered_data_new.append(line)
     # elif random_chance(interp(line['torque'], [-471, -105, 95, 194, 494], [100, 40 / 2, 35 / 2, 45 / 2, 100])):
@@ -249,14 +277,15 @@ def load_data(fn='data', to_normalize=False, plot_dists=False):  # filters and p
   data = filtered_data_new
   del filtered_data_new
 
+  print('Evening out torque')
   data = even_out_torque(data)  # there's more left angled samples than right for some reason
-
 
   print('Removed inliers: {} samples'.format(len(data)))
 
   data_stats = get_stats(data)  # get stats about final filtered data
 
   if plot_dists:
+    print('Plotting distributions')
     plot_distributions(data, 2)
 
   print(f'Angle mean, std: {data_stats["angle"].mean, data_stats["angle"].std}')
@@ -265,7 +294,7 @@ def load_data(fn='data', to_normalize=False, plot_dists=False):  # filters and p
   ADD_SYNTHETIC_SAMPLES = True  # fixme, this affects mean and std, but not min/max for normalizing
   if ADD_SYNTHETIC_SAMPLES:
 
-    n_synthetic_samples = round(len(data) / 20)
+    n_synthetic_samples = round(len(data) / 60)
     print('There are currently {} real samples'.format(len(data)))
     print('Adding {} synthetic samples...'.format(n_synthetic_samples), flush=True)
     data += data_generator.generate_many(n_synthetic_samples)
@@ -282,6 +311,7 @@ def load_data(fn='data', to_normalize=False, plot_dists=False):  # filters and p
     print('Added synthetic data: {} samples'.format(len(data)))
 
     if plot_dists:
+      print('Plotting distributions')
       plot_distributions(data, 3)  # this takes a while
 
   # Normalize data
@@ -289,6 +319,8 @@ def load_data(fn='data', to_normalize=False, plot_dists=False):  # filters and p
     data = [normalize_sample(line, data_stats, to_normalize) for line in data]
 
   # Return flattened samples, original sequences of data (filtered), and stats about filtered_data
+  with open('data_processed', 'wb') as f:
+    pickle.dump([data, data_sequences], f)
   return data, data_sequences, data_stats, data_generator
 
   # filtered_data = []  # todo: check for disengagement (or engagement if disengaged) or user override in future
@@ -303,7 +335,6 @@ def load_data(fn='data', to_normalize=False, plot_dists=False):  # filters and p
   #     filtered_data.append(new_sec)
   # data = filtered_data
   # del filtered_data
-
 
 
 if __name__ == "__main__":
